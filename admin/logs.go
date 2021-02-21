@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	duoapi "github.com/duosecurity/duo_api_golang"
+	duoapi "github.com/samirsa/duo_api_golang"
 )
 
 // maxLogV1PageSize sets 1000 as the maximum page size for API V1 log endpoints.
