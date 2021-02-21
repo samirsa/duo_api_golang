@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	duoapi "github.com/duosecurity/duo_api_golang"
+	duoapi "github.com/samirsa/duo_api_golang"
 )
 
 func buildAdminClient(url string, proxy func(*http.Request) (*url.URL, error)) *Client {
