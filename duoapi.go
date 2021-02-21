@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
+	"hash"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -60,14 +61,17 @@ func sign(ikey string,
 	host string,
 	uri string,
 	date string,
-	params url.Values) string {
+	params url.Values,
+	shaFunc shaNewFunc) string {
 	canon := canonicalize(method, host, uri, params, date)
-	mac := hmac.New(sha1.New, []byte(skey))
+	mac := hmac.New(shaFunc, []byte(skey))
 	mac.Write([]byte(canon))
 	sig := hex.EncodeToString(mac.Sum(nil))
 	auth := ikey + ":" + sig
 	return "Basic " + base64.StdEncoding.EncodeToString([]byte(auth))
 }
+
+type shaNewFunc func() hash.Hash
 
 type DuoApi struct {
 	ikey       string
@@ -77,6 +81,7 @@ type DuoApi struct {
 	apiClient  httpClient
 	authClient httpClient
 	sleepSvc   sleepService
+	shaFunc    shaNewFunc
 }
 
 type httpClient interface {
@@ -92,10 +97,17 @@ func (svc timeSleepService) Sleep(duration time.Duration) {
 }
 
 type apiOptions struct {
-	timeout   time.Duration
-	insecure  bool
-	proxy     func(*http.Request) (*url.URL, error)
-	transport func(*http.Transport)
+	timeout    time.Duration
+	insecure   bool
+	proxy      func(*http.Request) (*url.URL, error)
+	transport  func(*http.Transport)
+	shaNewFunc func() hash.Hash
+}
+
+func SetSHAType(shaFunc shaNewFunc) func(*apiOptions) {
+	return func(opts *apiOptions) {
+		opts.shaNewFunc = shaFunc
+	}
 }
 
 // Optional parameter for NewDuoApi, used to configure timeouts on API calls.
@@ -169,6 +181,13 @@ func NewDuoApi(ikey string,
 	}
 	userAgent += defaultUserAgent
 
+	var shaFunc shaNewFunc
+	if opts.shaNewFunc != nil {
+		shaFunc = opts.shaNewFunc
+	} else {
+		shaFunc = sha1.New
+	}
+
 	return &DuoApi{
 		ikey:      ikey,
 		skey:      skey,
@@ -182,6 +201,7 @@ func NewDuoApi(ikey string,
 			Transport: tr,
 		},
 		sleepSvc: timeSleepService{},
+		shaFunc:  shaFunc,
 	}
 }
 
@@ -255,7 +275,7 @@ func (duoapi *DuoApi) SignedCall(method string,
 	options ...DuoApiOption) (*http.Response, []byte, error) {
 
 	now := time.Now().UTC().Format(time.RFC1123Z)
-	auth_sig := sign(duoapi.ikey, duoapi.skey, method, duoapi.host, uri, now, params)
+	auth_sig := sign(duoapi.ikey, duoapi.skey, method, duoapi.host, uri, now, params, duoapi.shaFunc)
 
 	url := url.URL{
 		Scheme: "https",

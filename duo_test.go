@@ -2,7 +2,10 @@ package duoapi
 
 import (
 	"bytes"
+	"crypto/sha1"
+	"crypto/sha512"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -124,7 +127,7 @@ func TestSign(t *testing.T) {
 		"api-XXXXXXXX.duosecurity.com",
 		"/accounts/v1/account/list",
 		"Tue, 21 Aug 2012 17:29:18 -0000",
-		values)
+		values, sha1.New)
 	if res != "Basic RElXSjhYNkFFWU9SNU9NQzZUUTE6MmQ5N2Q2MTY2MzE5Nzgx"+
 		"YjVhM2EwN2FmMzlkMzY2ZjQ5MTIzNGVkYw==" {
 		t.Error("Signature did not produce output documented at " +
@@ -215,6 +218,7 @@ func getMockClients(httpResponses []http.Response) (*DuoApi, *mockHttpClient, *m
 		apiClient:  httpClient,
 		authClient: httpClient,
 		sleepSvc:   sleepSvc,
+		shaFunc:    sha1.New,
 	}, httpClient, sleepSvc
 }
 
@@ -342,4 +346,30 @@ func (svc *mockSleepService) Sleep(duration time.Duration) {
 		svc.sleepCalls = []time.Duration{}
 	}
 	svc.sleepCalls = append(svc.sleepCalls, duration)
+}
+
+func TestDuo(t *testing.T) {
+	api := NewDuoApi("version_sync",
+		"abc",
+		"host",
+		"go-client",
+		SetInsecure(), SetSHAType(sha512.New))
+	if api == nil {
+		t.Fatal("Failed to create a new Duo Api")
+	}
+
+	/*
+		duoClient := duoAdmin.New(*api)
+		if getUsersResult, err := duoClient.GetUsers(); err == nil {
+			repr.Println(getUsersResult)
+		} else {
+			log.WithFields(log.Fields{"err": err}).Errorf("Error in invoking getUsers")
+		}
+	*/
+
+	if _, b, err := api.SignedCall("GET", "/v1/versions", nil); err == nil {
+		fmt.Println(string(b))
+	} else {
+		fmt.Println("Error in invoking Duo Call")
+	}
 }
